@@ -50,6 +50,8 @@
         }
         .product-info { margin-bottom: 20px; }
         .product-info .sku { font-size: 1.4rem; font-weight: 700; color: #0066ff; }
+        .product-info .sku a { color: #0066ff; text-decoration: none; }
+        .product-info .sku a:hover { text-decoration: underline; }
         .product-info .name { font-size: 1.1rem; color: #333; margin-top: 4px; }
         .product-info .cert-text {
             display: inline-block; margin-top: 8px; padding: 4px 12px;
@@ -227,7 +229,7 @@
 
         function renderResultHtml(data) {
             let html = '<div class="result-card"><div class="product-info">';
-            html += `<div class="sku">SKU: ${escapeHtml(data.sku)}</div>`;
+            html += `<div class="sku">SKU: ${data.url ? `<a href="${data.url}" target="_blank">${escapeHtml(data.sku)}</a>` : escapeHtml(data.sku)}</div>`;
             if (data.name) html += `<div class="name">${escapeHtml(data.name)}</div>`;
             if (data.cert_text) html += `<span class="cert-text">${escapeHtml(data.cert_text)}</span>`;
             html += '</div>';
@@ -259,7 +261,7 @@
             const certName = CERT_NAMES[certType] || certType;
             const match = (data.certifications || []).find(c => c.type.toUpperCase() === certType);
             let html = '<div class="result-card"><div class="product-info">';
-            html += `<div class="sku">SKU: ${escapeHtml(data.sku)}</div>`;
+            html += `<div class="sku">SKU: ${data.url ? `<a href="${data.url}" target="_blank">${escapeHtml(data.sku)}</a>` : escapeHtml(data.sku)}</div>`;
             if (data.name) html += `<div class="name">${escapeHtml(data.name)}</div>`;
             html += '</div>';
             if (match) {
