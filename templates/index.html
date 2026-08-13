@@ -89,6 +89,24 @@
         .loading { text-align: center; padding: 40px; color: #999; }
         .error { text-align: center; padding: 40px; color: #c00; }
         .stats { text-align: center; color: #999; font-size: 0.8rem; margin-top: 30px; }
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+        .filter-bar label { font-size: 0.9rem; color: #333; white-space: nowrap; font-weight: 500; }
+        .filter-bar select {
+            padding: 8px 12px; border: 2px solid #ddd; border-radius: 8px;
+            font-size: 0.9rem; outline: none; background: #fff; cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .filter-bar select:focus { border-color: #0066ff; }
+        .filter-bar .hint { color: #999; font-size: 0.78rem; }
+        .cert-found-badge {
+            display: inline-block; padding: 6px 14px; background: #d4edda;
+            color: #155724; border-radius: 6px; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px;
+        }
+        .cert-missing-badge {
+            display: inline-block; padding: 6px 14px; background: #fff3cd;
+            color: #856404; border-radius: 6px; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px;
+        }
+        .summary-card { text-align: center; background: #f0f5ff; border: 1px solid #cce0ff; }
     </style>
 </head>
 <body>
@@ -100,6 +118,23 @@
         <div class="search-box">
             <input type="text" id="skuInput" placeholder="输入 SKU 号，多个用逗号或空格分隔（最多 8 个），如 114993117, 114993118" autofocus>
             <button id="searchBtn" onclick="doSearch()">查询</button>
+        </div>
+        <div class="filter-bar">
+            <label for="certFilter">认证类型筛选：</label>
+            <select id="certFilter">
+                <option value="">全部认证</option>
+                <option value="CE">CE（欧盟）</option>
+                <option value="FCC">FCC（美国）</option>
+                <option value="ROHS">RoHS</option>
+                <option value="KC">KC（韩国）</option>
+                <option value="TELEC">TELEC（日本）</option>
+                <option value="UKCA">UKCA（英国）</option>
+                <option value="UKDOC">UKCA 符合性声明</option>
+                <option value="EUDOC">EU 符合性声明</option>
+                <option value="UL">UL（美国安全）</option>
+                <option value="TEST_REPORT">测试报告</option>
+            </select>
+            <span class="hint">选指定认证后，查询会逐个标出哪些 SKU 有 / 无该认证</span>
         </div>
         <div class="export-bar">
             <button id="exportBtn" onclick="downloadExcel()">📥 下载 Excel 认证映射表</button>
@@ -119,6 +154,18 @@
             if (e.key === "Enter") doSearch();
         });
 
+        const certFilter = document.getElementById("certFilter");
+        let lastResults = [];
+        let lastNotFound = [];
+
+        const CERT_NAMES = {
+            CE: "CE 认证", FCC: "FCC 认证", ROHS: "RoHS 认证", KC: "KC 认证",
+            TELEC: "TELEC 认证", UKCA: "UKCA 认证", UKDOC: "UKCA 符合性声明",
+            EUDOC: "EU 符合性声明", UL: "UL 认证", TEST_REPORT: "测试报告"
+        };
+
+        certFilter.addEventListener("change", renderAll);
+
         async function doSearch() {
             const raw = skuInput.value.trim();
             if (!raw) return;
@@ -133,7 +180,9 @@
                 try {
                     const resp = await fetch(`/api/query?sku=${encodeURIComponent(skus[0])}`);
                     const data = await resp.json();
-                    resultDiv.innerHTML = data.found ? renderResultHtml(data) : `<div class="error">${escapeHtml(data.message || "未找到该 SKU 的认证信息。")}</div>`;
+                    lastResults = data.found ? [data] : [];
+                    lastNotFound = data.found ? [] : [{ sku: skus[0], message: data.message }];
+                    renderAll();
                 } catch (e) {
                     resultDiv.innerHTML = `<div class="error">查询失败：${escapeHtml(e.message)}</div>`;
                 } finally {
@@ -149,19 +198,31 @@
                 const resp = await fetch(`/api/query/batch?skus=${encodeURIComponent(batch.join(","))}`);
                 const data = await resp.json();
                 const items = data.results || [];
-                if (!items.length) {
-                    resultDiv.innerHTML = '<div class="error">未找到任何结果。</div>';
-                } else {
-                    resultDiv.innerHTML = items.map(r =>
-                        r.found ? renderResultHtml(r) : `<div class="result-card"><div class="error">SKU ${escapeHtml(r.sku)}：${escapeHtml(r.message || "未找到认证信息")}</div></div>`
-                    ).join("");
-                }
+                lastResults = items.filter(r => r.found);
+                lastNotFound = items.filter(r => !r.found);
+                renderAll();
             } catch (e) {
                 resultDiv.innerHTML = `<div class="error">批量查询失败：${escapeHtml(e.message)}</div>`;
             } finally {
                 searchBtn.disabled = false;
                 searchBtn.textContent = "查询";
             }
+        }
+
+        function renderAll() {
+            if (!lastResults.length && !lastNotFound.length) return;
+            const ct = certFilter.value;
+            let html = "";
+            const total = lastResults.length + lastNotFound.length;
+            if (ct && total > 1) {
+                const certName = CERT_NAMES[ct] || ct;
+                const has = lastResults.filter(r => (r.certifications || []).some(c => c.type.toUpperCase() === ct)).length;
+                const no = total - has;
+                html += `<div class="result-card summary-card"><strong>${escapeHtml(certName)} 筛选结果</strong>：共 ${total} 个 SKU · <span style="color:#155724">${has} 个有</span> · <span style="color:#856404">${no} 个无</span></div>`;
+            }
+            html += lastResults.map(r => ct ? renderFilteredHtml(r, ct) : renderResultHtml(r)).join("");
+            html += lastNotFound.map(r => `<div class="result-card"><div class="error">SKU ${escapeHtml(r.sku)}：${escapeHtml(r.message || "未找到")}</div></div>`).join("");
+            resultDiv.innerHTML = html || '<div class="error">未找到任何结果。</div>';
         }
 
         function renderResultHtml(data) {
@@ -189,6 +250,30 @@
             }
             if (data.url) {
                 html += `<div class="product-link"><a href="${data.url}" target="_blank">查看 Seeed Studio 产品页面 →</a></div>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderFilteredHtml(data, certType) {
+            const certName = CERT_NAMES[certType] || certType;
+            const match = (data.certifications || []).find(c => c.type.toUpperCase() === certType);
+            let html = '<div class="result-card"><div class="product-info">';
+            html += `<div class="sku">SKU: ${escapeHtml(data.sku)}</div>`;
+            if (data.name) html += `<div class="name">${escapeHtml(data.name)}</div>`;
+            html += '</div>';
+            if (match) {
+                html += `<div class="cert-found-badge">✅ 有 ${escapeHtml(certName)}</div>`;
+                html += '<div class="cert-list"><div class="cert-item">';
+                const badge = match.source === "wiki"
+                    ? '<span class="cert-badge badge-wiki">测试报告</span>'
+                    : '<span class="cert-badge badge-certificate">证书</span>';
+                let certNum = match.cert_number ? ` · 认证号: ${escapeHtml(match.cert_number)}` : "";
+                html += `<div><span>${badge}</span><span class="cert-name">${escapeHtml(match.name)}${certNum}</span></div>`;
+                html += `<a href="${match.pdf_url}" target="_blank">查看 PDF</a>`;
+                html += '</div></div>';
+            } else {
+                html += `<div class="cert-missing-badge">❌ 没有查询到该SKU的${escapeHtml(certName)}</div>`;
             }
             html += '</div>';
             return html;
