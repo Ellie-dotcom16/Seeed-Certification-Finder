@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -98,7 +98,7 @@
             <p>输入 SKU 号，查询产品的认证信息与证书 PDF</p>
         </div>
         <div class="search-box">
-            <input type="text" id="skuInput" placeholder="输入 SKU 号，如 114993117" autofocus>
+            <input type="text" id="skuInput" placeholder="输入 SKU 号，多个用逗号或空格分隔（最多 8 个），如 114993117, 114993118" autofocus>
             <button id="searchBtn" onclick="doSearch()">查询</button>
         </div>
         <div class="export-bar">
@@ -120,36 +120,56 @@
         });
 
         async function doSearch() {
-            const sku = skuInput.value.trim();
-            if (!sku) return;
+            const raw = skuInput.value.trim();
+            if (!raw) return;
+            const skus = raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+            if (!skus.length) return;
             searchBtn.disabled = true;
             searchBtn.textContent = "查询中...";
             resultDiv.style.display = "block";
-            resultDiv.innerHTML = '<div class="loading">正在查询认证信息，首次查询可能需要几秒钟...</div>';
 
+            if (skus.length === 1) {
+                resultDiv.innerHTML = '<div class="loading">正在查询认证信息，首次查询可能需要几秒钟...</div>';
+                try {
+                    const resp = await fetch(`/api/query?sku=${encodeURIComponent(skus[0])}`);
+                    const data = await resp.json();
+                    resultDiv.innerHTML = data.found ? renderResultHtml(data) : `<div class="error">${escapeHtml(data.message || "未找到该 SKU 的认证信息。")}</div>`;
+                } catch (e) {
+                    resultDiv.innerHTML = `<div class="error">查询失败：${escapeHtml(e.message)}</div>`;
+                } finally {
+                    searchBtn.disabled = false;
+                    searchBtn.textContent = "查询";
+                }
+                return;
+            }
+
+            const batch = skus.slice(0, 8);
+            resultDiv.innerHTML = `<div class="loading">正在批量查询 ${batch.length} 个 SKU，首次查询可能较慢，请稍候...</div>`;
             try {
-                const resp = await fetch(`/api/query?sku=${encodeURIComponent(sku)}`);
+                const resp = await fetch(`/api/query/batch?skus=${encodeURIComponent(batch.join(","))}`);
                 const data = await resp.json();
-                if (!data.found) {
-                    resultDiv.innerHTML = `<div class="error">${data.message || "未找到该 SKU 的认证信息。"}</div>`;
+                const items = data.results || [];
+                if (!items.length) {
+                    resultDiv.innerHTML = '<div class="error">未找到任何结果。</div>';
                 } else {
-                    renderResult(data);
+                    resultDiv.innerHTML = items.map(r =>
+                        r.found ? renderResultHtml(r) : `<div class="result-card"><div class="error">SKU ${escapeHtml(r.sku)}：${escapeHtml(r.message || "未找到认证信息")}</div></div>`
+                    ).join("");
                 }
             } catch (e) {
-                resultDiv.innerHTML = `<div class="error">查询失败：${e.message}</div>`;
+                resultDiv.innerHTML = `<div class="error">批量查询失败：${escapeHtml(e.message)}</div>`;
             } finally {
                 searchBtn.disabled = false;
                 searchBtn.textContent = "查询";
             }
         }
 
-        function renderResult(data) {
+        function renderResultHtml(data) {
             let html = '<div class="result-card"><div class="product-info">';
-            html += `<div class="sku">SKU: ${data.sku}</div>`;
+            html += `<div class="sku">SKU: ${escapeHtml(data.sku)}</div>`;
             if (data.name) html += `<div class="name">${escapeHtml(data.name)}</div>`;
             if (data.cert_text) html += `<span class="cert-text">${escapeHtml(data.cert_text)}</span>`;
             html += '</div>';
-
             const certs = data.certifications || [];
             if (certs.length > 0) {
                 html += '<div class="section-title">认证文件（PDF）</div><div class="cert-list">';
@@ -164,7 +184,6 @@
             } else {
                 html += '<div class="section-title">未找到认证 PDF 文件</div>';
             }
-
             if (data.datasheet_url) {
                 html += `<div class="datasheet-link"><a href="${data.datasheet_url}" target="_blank">📄 下载产品规格书 PDF</a></div>`;
             }
@@ -172,9 +191,8 @@
                 html += `<div class="product-link"><a href="${data.url}" target="_blank">查看 Seeed Studio 产品页面 →</a></div>`;
             }
             html += '</div>';
-            resultDiv.innerHTML = html;
+            return html;
         }
-
         function escapeHtml(text) {
             const div = document.createElement("div");
             div.textContent = text;

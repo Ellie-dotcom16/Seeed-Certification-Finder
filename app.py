@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Seeed Studio 认证查询服务
 ===========================
@@ -126,6 +126,25 @@ def api_query():
     product["found"] = True
     return jsonify(product)
 
+
+@app.route("/api/query/batch")
+def api_query_batch():
+    """批量查询多个 SKU（逗号/空格/换行分隔，上限 8 个）"""
+    import re
+    raw = request.args.get("skus", "").strip()
+    if not raw:
+        return jsonify({"error": "请提供 skus 参数"}), 400
+    skus = [s.strip() for s in re.split(r"[,\s;]+", raw) if s.strip()]
+    skus = skus[:8]
+    results = []
+    for sku in skus:
+        product = query_sku(sku)
+        if product and (product.get("certifications") or product.get("cert_text")):
+            product["found"] = True
+            results.append(product)
+        else:
+            results.append({"sku": sku, "found": False, "message": "未找到该 SKU 的认证信息。请确认 SKU 号是否正确。"})
+    return jsonify({"count": len(results), "results": results})
 
 @app.route("/api/search")
 def api_search():
