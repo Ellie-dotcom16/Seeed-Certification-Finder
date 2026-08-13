@@ -24,6 +24,8 @@ import html as htmllib
 from datetime import datetime, timezone
 
 import requests
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ============================================================
 # 配置
@@ -42,7 +44,7 @@ HEADERS = {
 }
 REQUEST_TIMEOUT = 25
 REQUEST_DELAY = 1.2
-CACHE_HOURS = 24
+CACHE_HOURS = 168  # 7 ????????????????????/????
 
 CERT_TYPE_NAMES = {
     "CE": "CE 认证（欧盟符合性）",
@@ -60,6 +62,21 @@ CERT_TYPE_NAMES = {
 }
 
 WIKI_EXCLUDE_KEYWORDS = ["warranty", "success-case", "tutorial", "guide", "manual"]
+
+from requests.adapters import HTTPAdapter
+try:
+    from urllib3.util.retry import Retry
+except Exception:
+    from requests.packages.urllib3.util.retry import Retry
+
+# ?????? Session????? 429 / 5xx ??
+SESSION = requests.Session()
+_retry = Retry(total=4, backoff_factor=0.6,
+               status_forcelist=[429, 500, 502, 503, 504],
+               allowed_methods=["GET", "HEAD"])
+SESSION.mount("https://", HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=10))
+SESSION.mount("http://", HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=10))
+SESSION.headers.update(HEADERS)
 
 
 # ============================================================
@@ -144,7 +161,7 @@ def is_fresh(conn, sku, max_age_hours=CACHE_HOURS):
 # ============================================================
 def fetch_sitemap_products():
     print("正在获取 sitemap.xml ...")
-    resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=30)
+    resp = SESSION.get(SITEMAP_URL, timeout=30)
     resp.raise_for_status()
     urls = re.findall(r"<loc>(.*?)</loc>", resp.text)
     products = []
@@ -157,7 +174,7 @@ def fetch_sitemap_products():
 
 
 def fetch_page(url):
-    resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+    resp = SESSION.get(url, timeout=REQUEST_TIMEOUT)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -255,56 +272,71 @@ def extract_product_data(html_text, url):
 # ============================================================
 # 批量抓取
 # ============================================================
-def scrape_all(force=False, delay=REQUEST_DELAY):
+def scrape_all(force=False, delay=REQUEST_DELAY, workers=1):
     conn = init_db()
     products = fetch_sitemap_products()
     total = len(products)
-    success, skipped, failed = 0, 0, 0
 
-    for i, p in enumerate(products, 1):
-        pid = p["product_id"]
-        url = p["url"]
-
+    # Pre-filter fresh entries (fast single-threaded DB read)
+    todo, skipped = [], 0
+    for p in products:
         if not force:
             existing = conn.execute(
                 "SELECT sku FROM products WHERE product_id = ? AND "
                 "datetime(last_updated) > datetime('now', ?)",
-                (pid, f"-{CACHE_HOURS} hours"),
+                (p["product_id"], f"-{CACHE_HOURS} hours"),
             ).fetchone()
             if existing:
                 skipped += 1
                 continue
+        todo.append(p)
 
+    success, failed, done = 0, 0, 0
+
+    def worker(p):
         try:
-            html_text = fetch_page(url)
+            html_text = fetch_page(p["url"])
             if html_text is None:
-                failed += 1
-                continue
+                return None
+            return extract_product_data(html_text, p["url"])
+        except Exception:
+            return None
 
-            product = extract_product_data(html_text, url)
+    def report(done, todo_n):
+        if done % 100 == 0 or done <= 5 or done == todo_n:
+            print(f"  [{done}/{todo_n}] ??:{success} ??:{skipped} ??:{failed}")
+
+    if workers and workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(worker, p): p for p in todo}
+            for fut in as_completed(futs):
+                done += 1
+                try:
+                    product = fut.result()
+                except Exception:
+                    product = None
+                if product:
+                    save_product(conn, product)
+                    success += 1
+                else:
+                    failed += 1
+                report(done, len(todo))
+    else:
+        for p in todo:
+            product = worker(p)
+            done += 1
             if product:
                 save_product(conn, product)
                 success += 1
-                if i % 50 == 0 or i <= 5:
-                    n_certs = len(product["certifications"])
-                    print(f"  [{i}/{total}] SKU:{product['sku']} | {product['name'][:40]} | 认证:{n_certs}个")
             else:
                 failed += 1
-        except Exception as e:
-            failed += 1
-            if i <= 10 or i % 100 == 0:
-                print(f"  [{i}/{total}] 错误 {pid}: {e}")
-
-        if i % 200 == 0:
-            print(f"  --- 进度: {i}/{total} | 成功:{success} 跳过:{skipped} 失败:{failed} ---")
-
-        time.sleep(delay)
+            report(done, len(todo))
+            if delay:
+                time.sleep(delay)
 
     conn.close()
-    print(f"\n抓取完成！成功:{success} 跳过:{skipped} 失败:{failed} 总计:{total}")
+    print(f"\n???????:{success} ??:{skipped} ??:{failed} ??:{total}")
     return success
-
-
 def scrape_single(sku):
     conn = init_db()
 
@@ -353,6 +385,7 @@ def main():
     parser.add_argument("--force", action="store_true", help="强制重新抓取所有产品")
     parser.add_argument("--sku", type=str, help="只查询单个 SKU")
     parser.add_argument("--delay", type=float, default=REQUEST_DELAY, help="请求间隔秒数")
+    parser.add_argument("--workers", type=int, default=1, help="并发线程数（建议 6-10）")
     args = parser.parse_args()
 
     if args.sku:
@@ -363,7 +396,7 @@ def main():
         print("=" * 60)
         print("Seeed Studio 认证信息全量抓取")
         print("=" * 60)
-        scrape_all(force=args.force, delay=args.delay)
+        scrape_all(force=args.force, delay=args.delay, workers=args.workers)
 
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Local database (contains scraped data, too large for git)
-cert_data.db
+# Local database (shipped pre-built so Render has data; re-scrape to refresh)
+# cert_data.db
 
 # Local dependencies
 libs/

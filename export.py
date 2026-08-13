@@ -215,7 +215,7 @@ def generate_excel(output_path=None):
                 cert_name = CERT_TYPE_NAMES.get(cert_type, cert_type)
                 cert_number = cert.get("cert_number", "")
                 if not cert_number:
-                    cert_number = "未提取（运行 export.py --extract-pdfs）"
+                    cert_number = "待提取"
                 pdf_url = cert.get("pdf_url", "")
 
                 ws.cell(row=row_num, column=1, value=sku).font = cell_font
