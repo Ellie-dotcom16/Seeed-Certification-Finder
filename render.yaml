@@ -1,0 +1,15 @@
+﻿services:
+  - type: web
+    name: seeed-cert-agent
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py --port $PORT
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: FEISHU_APP_ID
+        sync: false
+      - key: FEISHU_APP_SECRET
+        sync: false
+      - key: FEISHU_VERIFICATION_TOKEN
+        sync: false

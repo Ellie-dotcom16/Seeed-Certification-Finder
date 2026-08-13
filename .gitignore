@@ -1,0 +1,20 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local database (contains scraped data, too large for git)
+cert_data.db
+
+# Local dependencies
+libs/
+
+# Environment variables (contains secrets)
+.env
+
+# Generated Excel files
+*.xlsx
+
+# OS files
+Thumbs.db
+.DS_Store

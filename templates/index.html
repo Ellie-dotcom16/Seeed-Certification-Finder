@@ -1,0 +1,204 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seeed Studio 认证查询</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #1a1a1a;
+            min-height: 100vh;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; padding: 30px 0; }
+        .header h1 { font-size: 1.6rem; color: #333; margin-bottom: 8px; }
+        .header p { color: #666; font-size: 0.9rem; }
+        .search-box {
+            display: flex; gap: 10px; margin-bottom: 12px;
+        }
+        .search-box input {
+            flex: 1; padding: 12px 16px; border: 2px solid #ddd;
+            border-radius: 8px; font-size: 1rem; outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus { border-color: #0066ff; }
+        .search-box button {
+            padding: 12px 28px; background: #0066ff; color: #fff;
+            border: none; border-radius: 8px; font-size: 1rem;
+            cursor: pointer; transition: background 0.2s; white-space: nowrap;
+        }
+        .search-box button:hover { background: #0052cc; }
+        .search-box button:disabled { background: #999; cursor: not-allowed; }
+        .export-bar {
+            display: flex; gap: 10px; margin-bottom: 20px; align-items: center;
+        }
+        .export-bar button {
+            padding: 10px 20px; background: #1a8a3a; color: #fff;
+            border: none; border-radius: 8px; font-size: 0.9rem;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .export-bar button:hover { background: #156528; }
+        .export-bar button:disabled { background: #999; cursor: not-allowed; }
+        .export-bar .hint { color: #999; font-size: 0.8rem; }
+        .result { display: none; }
+        .result-card {
+            background: #fff; border-radius: 12px; padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px;
+        }
+        .product-info { margin-bottom: 20px; }
+        .product-info .sku { font-size: 1.4rem; font-weight: 700; color: #0066ff; }
+        .product-info .name { font-size: 1.1rem; color: #333; margin-top: 4px; }
+        .product-info .cert-text {
+            display: inline-block; margin-top: 8px; padding: 4px 12px;
+            background: #e6f0ff; border-radius: 4px; font-size: 0.9rem; color: #0066ff;
+        }
+        .section-title {
+            font-size: 1rem; font-weight: 600; margin-bottom: 12px;
+            padding-bottom: 8px; border-bottom: 1px solid #eee;
+        }
+        .cert-list { display: flex; flex-direction: column; gap: 10px; }
+        .cert-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; background: #f8f9fa; border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .cert-item:hover { background: #eef1f5; }
+        .cert-item .cert-name { font-weight: 500; }
+        .cert-item .cert-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 0.75rem; font-weight: 600; margin-right: 8px;
+        }
+        .badge-certificate { background: #d4edda; color: #155724; }
+        .badge-wiki { background: #fff3cd; color: #856404; }
+        .cert-item a {
+            color: #0066ff; text-decoration: none; font-size: 0.85rem;
+            padding: 4px 12px; border: 1px solid #0066ff; border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .cert-item a:hover { background: #0066ff; color: #fff; }
+        .datasheet-link {
+            margin-top: 12px; padding: 10px 16px; background: #fff;
+            border: 1px solid #ddd; border-radius: 8px; text-align: center;
+        }
+        .datasheet-link a { color: #0066ff; text-decoration: none; font-weight: 500; }
+        .product-link { text-align: center; margin-top: 8px; }
+        .product-link a { color: #999; font-size: 0.85rem; text-decoration: none; }
+        .loading { text-align: center; padding: 40px; color: #999; }
+        .error { text-align: center; padding: 40px; color: #c00; }
+        .stats { text-align: center; color: #999; font-size: 0.8rem; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Seeed Studio 产品认证查询</h1>
+            <p>输入 SKU 号，查询产品的认证信息与证书 PDF</p>
+        </div>
+        <div class="search-box">
+            <input type="text" id="skuInput" placeholder="输入 SKU 号，如 114993117" autofocus>
+            <button id="searchBtn" onclick="doSearch()">查询</button>
+        </div>
+        <div class="export-bar">
+            <button id="exportBtn" onclick="downloadExcel()">📥 下载 Excel 认证映射表</button>
+            <span class="hint">包含所有 SKU 的认证类型、证书号、PDF链接、产品页面</span>
+        </div>
+        <div id="result" class="result"></div>
+        <div id="stats" class="stats"></div>
+    </div>
+    <script>
+        const skuInput = document.getElementById("skuInput");
+        const searchBtn = document.getElementById("searchBtn");
+        const resultDiv = document.getElementById("result");
+        const statsDiv = document.getElementById("stats");
+        const exportBtn = document.getElementById("exportBtn");
+
+        skuInput.addEventListener("keypress", e => {
+            if (e.key === "Enter") doSearch();
+        });
+
+        async function doSearch() {
+            const sku = skuInput.value.trim();
+            if (!sku) return;
+            searchBtn.disabled = true;
+            searchBtn.textContent = "查询中...";
+            resultDiv.style.display = "block";
+            resultDiv.innerHTML = '<div class="loading">正在查询认证信息，首次查询可能需要几秒钟...</div>';
+
+            try {
+                const resp = await fetch(`/api/query?sku=${encodeURIComponent(sku)}`);
+                const data = await resp.json();
+                if (!data.found) {
+                    resultDiv.innerHTML = `<div class="error">${data.message || "未找到该 SKU 的认证信息。"}</div>`;
+                } else {
+                    renderResult(data);
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error">查询失败：${e.message}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = "查询";
+            }
+        }
+
+        function renderResult(data) {
+            let html = '<div class="result-card"><div class="product-info">';
+            html += `<div class="sku">SKU: ${data.sku}</div>`;
+            if (data.name) html += `<div class="name">${escapeHtml(data.name)}</div>`;
+            if (data.cert_text) html += `<span class="cert-text">${escapeHtml(data.cert_text)}</span>`;
+            html += '</div>';
+
+            const certs = data.certifications || [];
+            if (certs.length > 0) {
+                html += '<div class="section-title">认证文件（PDF）</div><div class="cert-list">';
+                certs.forEach(c => {
+                    const badge = c.source === "wiki"
+                        ? '<span class="cert-badge badge-wiki">测试报告</span>'
+                        : '<span class="cert-badge badge-certificate">证书</span>';
+                    let certNum = c.cert_number ? ` · 认证号: ${escapeHtml(c.cert_number)}` : "";
+                    html += `<div class="cert-item"><div><span>${badge}</span><span class="cert-name">${escapeHtml(c.name)}${certNum}</span></div><a href="${c.pdf_url}" target="_blank">查看 PDF</a></div>`;
+                });
+                html += '</div>';
+            } else {
+                html += '<div class="section-title">未找到认证 PDF 文件</div>';
+            }
+
+            if (data.datasheet_url) {
+                html += `<div class="datasheet-link"><a href="${data.datasheet_url}" target="_blank">📄 下载产品规格书 PDF</a></div>`;
+            }
+            if (data.url) {
+                html += `<div class="product-link"><a href="${data.url}" target="_blank">查看 Seeed Studio 产品页面 →</a></div>`;
+            }
+            html += '</div>';
+            resultDiv.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function downloadExcel() {
+            exportBtn.disabled = true;
+            exportBtn.textContent = "正在生成 Excel...";
+            window.location.href = "/api/export";
+            setTimeout(() => {
+                exportBtn.disabled = false;
+                exportBtn.textContent = "📥 下载 Excel 认证映射表";
+            }, 3000);
+        }
+
+        async function loadStats() {
+            try {
+                const resp = await fetch("/api/stats");
+                const data = await resp.json();
+                statsDiv.textContent = `数据库共 ${data.total_products || 0} 个产品 | ${data.products_with_certs || 0} 个有认证信息 | 最近更新: ${data.latest_update || "未知"}`;
+            } catch(e) { statsDiv.textContent = ""; }
+        }
+        loadStats();
+    </script>
+</body>
+</html>
