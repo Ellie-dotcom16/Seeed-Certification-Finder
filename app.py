@@ -151,15 +151,47 @@ def api_search():
     keyword = request.args.get("name", "").strip()
     if not keyword:
         return jsonify({"error": "请提供 name 参数"}), 400
-    conn = init_db()
-    rows = conn.execute(
-        "SELECT sku, name, cert_text FROM products WHERE name LIKE ? LIMIT 50",
-        (f"%{keyword}%",),
-    ).fetchall()
-    conn.close()
-    results = [{"sku": r[0], "name": r[1], "cert_text": r[2]} for r in rows]
-    return jsonify({"keyword": keyword, "count": len(results), "results": results})
 
+    words = [w for w in keyword.split() if w]
+    if not words:
+        return jsonify({"keyword": keyword, "count": 0, "results": []})
+
+    conn = init_db()
+
+    def _search(op):
+        conds = (" " + op + " ").join(["LOWER(name) LIKE ?" for _ in words])
+        params = tuple("%" + w.lower() + "%" for w in words)
+        return conn.execute(
+            "SELECT sku, name, cert_text, url, certifications, datasheet_url "
+            "FROM products WHERE name != '' AND (" + conds + ") "
+            "ORDER BY (certifications != '[]') DESC, name LIMIT 50",
+            params,
+        ).fetchall()
+
+    rows = _search("AND")
+    if not rows and len(words) > 1:
+        rows = _search("OR")
+
+    conn.close()
+
+    results = []
+    for r in rows:
+        certs = []
+        try:
+            certs = json.loads(r[4]) if r[4] else []
+        except Exception:
+            certs = []
+        results.append({
+            "sku": r[0],
+            "name": r[1],
+            "cert_text": r[2],
+            "url": r[3],
+            "certifications": certs,
+            "datasheet_url": r[5],
+            "found": True,
+        })
+
+    return jsonify({"keyword": keyword, "count": len(results), "results": results})
 
 @app.route("/api/stats")
 def api_stats():
