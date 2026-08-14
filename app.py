@@ -21,6 +21,7 @@ import argparse
 import io
 import json
 import os
+import hashlib
 import socket
 import sqlite3
 import tempfile
@@ -33,6 +34,7 @@ from scraper import (
     CERT_TYPE_NAMES, CACHE_HOURS, HEADERS,
 )
 from export import generate_excel
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 
@@ -103,6 +105,44 @@ def format_text(product):
 # ============================================================
 # Web 界面
 # ============================================================
+# ============================================================
+# 访问统计（埋点）
+# ============================================================
+def init_analytics():
+    conn = init_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS page_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_hash TEXT,
+            path TEXT,
+            timestamp TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+init_analytics()
+
+
+@app.before_request
+def track_visit():
+    if request.path == "/" and request.method == "GET":
+        try:
+            ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            if not ip:
+                ip = request.remote_addr or "unknown"
+            visitor_hash = hashlib.sha256(ip.encode()).hexdigest()[:16]
+            conn = init_db()
+            conn.execute(
+                "INSERT INTO page_views (visitor_hash, path, timestamp) VALUES (?, ?, ?)",
+                (visitor_hash, request.path, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -203,13 +243,22 @@ def api_stats():
     latest = conn.execute(
         "SELECT MAX(last_updated) FROM products"
     ).fetchone()[0]
+    try:
+        total_views = conn.execute("SELECT COUNT(*) FROM page_views").fetchone()[0]
+        unique_visitors = conn.execute(
+            "SELECT COUNT(DISTINCT visitor_hash) FROM page_views"
+        ).fetchone()[0]
+    except Exception:
+        total_views = 0
+        unique_visitors = 0
     conn.close()
     return jsonify({
         "total_products": total,
         "products_with_certs": with_certs,
         "latest_update": latest,
+        "total_views": total_views,
+        "unique_visitors": unique_visitors,
     })
-
 
 @app.route("/api/export")
 def api_export():
