@@ -331,7 +331,11 @@ function renderAll() {
             try {
                 const resp = await fetch("/api/stats");
                 const data = await resp.json();
-                statsDiv.textContent = `数据库共 ${data.total_products || 0} 个产品 | ${data.products_with_certs || 0} 个有认证信息 | 最近更新: ${data.latest_update || "未知"}`;
+                let stats = `数据库共 ${data.total_products || 0} 个产品 | ${data.products_with_certs || 0} 个有认证信息 | 最近更新: ${data.latest_update || "未知"}`;
+                if (data.total_views !== undefined) {
+                    stats += ` | 访问量: ${data.total_views} 次 | 独立访客: ${data.unique_visitors} 人`;
+                }
+                statsDiv.textContent = stats;
             } catch(e) { statsDiv.textContent = ""; }
         }
         loadStats();
