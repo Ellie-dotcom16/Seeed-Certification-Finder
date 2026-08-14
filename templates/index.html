@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9uZScgc3Ryb2tlPScjMDA2MUIwJyBzdHJva2Utd2lkdGg9JzIuNScgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJz48Y2lyY2xlIGN4PScxMC41JyBjeT0nMTAuNScgcj0nNi41Jy8+PGxpbmUgeDE9JzE1LjUnIHkxPScxNS41JyB4Mj0nMjAnIHkyPScyMCcvPjwvc3ZnPg==">
     <title>Seeed Studio 认证查询</title>
     <style>
+        :root { --brand: #0061B0; --brand-dark: #004C8C; --brand-tint: #E8F1F8; --brand-border: #CFE0F0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -24,13 +26,13 @@
             border-radius: 8px; font-size: 1rem; outline: none;
             transition: border-color 0.2s;
         }
-        .search-box input:focus { border-color: #0066ff; }
+        .search-box input:focus { border-color: var(--brand); }
         .search-box button {
-            padding: 12px 28px; background: #0066ff; color: #fff;
+            padding: 12px 28px; background: var(--brand); color: #fff;
             border: none; border-radius: 8px; font-size: 1rem;
             cursor: pointer; transition: background 0.2s; white-space: nowrap;
         }
-        .search-box button:hover { background: #0052cc; }
+        .search-box button:hover { background: var(--brand-dark); }
         .search-box button:disabled { background: #999; cursor: not-allowed; }
         .export-bar {
             display: flex; gap: 10px; margin-bottom: 20px; align-items: center;
@@ -49,13 +51,13 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px;
         }
         .product-info { margin-bottom: 20px; }
-        .product-info .sku { font-size: 1.4rem; font-weight: 700; color: #0066ff; }
-        .product-info .sku a { color: #0066ff; text-decoration: none; }
+        .product-info .sku { font-size: 1.4rem; font-weight: 700; color: var(--brand); }
+        .product-info .sku a { color: var(--brand); text-decoration: none; }
         .product-info .sku a:hover { text-decoration: underline; }
         .product-info .name { font-size: 1.1rem; color: #333; margin-top: 4px; }
         .product-info .cert-text {
             display: inline-block; margin-top: 8px; padding: 4px 12px;
-            background: #e6f0ff; border-radius: 4px; font-size: 0.9rem; color: #0066ff;
+            background: var(--brand-tint); border-radius: 4px; font-size: 0.9rem; color: var(--brand);
         }
         .section-title {
             font-size: 1rem; font-weight: 600; margin-bottom: 12px;
@@ -76,16 +78,16 @@
         .badge-certificate { background: #d4edda; color: #155724; }
         .badge-wiki { background: #fff3cd; color: #856404; }
         .cert-item a {
-            color: #0066ff; text-decoration: none; font-size: 0.85rem;
-            padding: 4px 12px; border: 1px solid #0066ff; border-radius: 4px;
+            color: var(--brand); text-decoration: none; font-size: 0.85rem;
+            padding: 4px 12px; border: 1px solid var(--brand); border-radius: 4px;
             transition: all 0.2s;
         }
-        .cert-item a:hover { background: #0066ff; color: #fff; }
+        .cert-item a:hover { background: var(--brand); color: #fff; }
         .datasheet-link {
             margin-top: 12px; padding: 10px 16px; background: #fff;
             border: 1px solid #ddd; border-radius: 8px; text-align: center;
         }
-        .datasheet-link a { color: #0066ff; text-decoration: none; font-weight: 500; }
+        .datasheet-link a { color: var(--brand); text-decoration: none; font-weight: 500; }
         .product-link { text-align: center; margin-top: 8px; }
         .product-link a { color: #999; font-size: 0.85rem; text-decoration: none; }
         .loading { text-align: center; padding: 40px; color: #999; }
@@ -98,7 +100,7 @@
             font-size: 0.9rem; outline: none; background: #fff; cursor: pointer;
             transition: border-color 0.2s;
         }
-        .filter-bar select:focus { border-color: #0066ff; }
+        .filter-bar select:focus { border-color: var(--brand); }
         .filter-bar .hint { color: #999; font-size: 0.78rem; }
         .cert-found-badge {
             display: inline-block; padding: 6px 14px; background: #d4edda;
@@ -108,17 +110,17 @@
             display: inline-block; padding: 6px 14px; background: #fff3cd;
             color: #856404; border-radius: 6px; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px;
         }
-        .summary-card { text-align: center; background: #f0f5ff; border: 1px solid #cce0ff; }
+        .summary-card { text-align: center; background: var(--brand-tint); border: 1px solid var(--brand-border); }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Seeed Studio 产品认证查询</h1>
-            <p>输入 SKU 号，查询产品的认证信息与证书 PDF</p>
+            <p>输入 SKU 号或产品名称，查询认证信息与证书 PDF</p>
         </div>
         <div class="search-box">
-            <input type="text" id="skuInput" placeholder="输入 SKU 号，多个用逗号或空格分隔（最多 8 个），如 114993117, 114993118" autofocus>
+            <input type="text" id="skuInput" placeholder="输入 SKU 号或产品名称，如 114993117 或 respeaker clip（多个 SKU 用逗号分隔）" autofocus>
             <button id="searchBtn" onclick="doSearch()">查询</button>
         </div>
         <div class="filter-bar">
@@ -159,6 +161,7 @@
         const certFilter = document.getElementById("certFilter");
         let lastResults = [];
         let lastNotFound = [];
+        let searchPrefix = "";
 
         const CERT_NAMES = {
             CE: "CE 认证", FCC: "FCC 认证", ROHS: "RoHS 认证", KC: "KC 认证",
@@ -168,15 +171,29 @@
 
         certFilter.addEventListener("change", renderAll);
 
-        async function doSearch() {
+                async function doSearch() {
             const raw = skuInput.value.trim();
             if (!raw) return;
-            const skus = raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
-            if (!skus.length) return;
             searchBtn.disabled = true;
             searchBtn.textContent = "查询中...";
             resultDiv.style.display = "block";
+            try {
+                if (/^[\d\s,;]+$/.test(raw) && /\d/.test(raw)) {
+                    const skus = raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+                    await doSkuSearch(skus);
+                } else {
+                    await doNameSearch(raw);
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error">查询失败：${escapeHtml(e.message)}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = "查询";
+            }
+        }
 
+        async function doSkuSearch(skus) {
+            searchPrefix = "";
             if (skus.length === 1) {
                 resultDiv.innerHTML = '<div class="loading">正在查询认证信息，首次查询可能需要几秒钟...</div>';
                 try {
@@ -187,13 +204,9 @@
                     renderAll();
                 } catch (e) {
                     resultDiv.innerHTML = `<div class="error">查询失败：${escapeHtml(e.message)}</div>`;
-                } finally {
-                    searchBtn.disabled = false;
-                    searchBtn.textContent = "查询";
                 }
                 return;
             }
-
             const batch = skus.slice(0, 8);
             resultDiv.innerHTML = `<div class="loading">正在批量查询 ${batch.length} 个 SKU，首次查询可能较慢，请稍候...</div>`;
             try {
@@ -205,16 +218,34 @@
                 renderAll();
             } catch (e) {
                 resultDiv.innerHTML = `<div class="error">批量查询失败：${escapeHtml(e.message)}</div>`;
-            } finally {
-                searchBtn.disabled = false;
-                searchBtn.textContent = "查询";
             }
         }
 
-        function renderAll() {
+        async function doNameSearch(query) {
+            resultDiv.innerHTML = '<div class="loading">正在搜索产品名称...</div>';
+            try {
+                const resp = await fetch(`/api/search?name=${encodeURIComponent(query)}`);
+                const data = await resp.json();
+                const items = data.results || [];
+                lastResults = items;
+                lastNotFound = [];
+                if (!lastResults.length) {
+                    searchPrefix = "";
+                    resultDiv.innerHTML = `<div class="error">未找到名称包含 "${escapeHtml(query)}" 的产品。<br>请检查拼写或尝试其他关键词，也可以直接输入 SKU 号查询。</div>`;
+                    return;
+                }
+                searchPrefix = `<div class="result-card summary-card"><strong>名称搜索 "${escapeHtml(query)}"</strong>：找到 ${lastResults.length} 个匹配产品（点击 SKU 号可跳转产品页面）</div>`;
+                renderAll();
+            } catch (e) {
+                searchPrefix = "";
+                resultDiv.innerHTML = `<div class="error">搜索失败：${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+function renderAll() {
             if (!lastResults.length && !lastNotFound.length) return;
             const ct = certFilter.value;
-            let html = "";
+            let html = searchPrefix;
             const total = lastResults.length + lastNotFound.length;
             if (ct && total > 1) {
                 const certName = CERT_NAMES[ct] || ct;
