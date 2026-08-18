@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9uZScgc3Ryb2tlPScjMDA2MUIwJyBzdHJva2Utd2lkdGg9JzIuNScgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJz48Y2lyY2xlIGN4PScxMC41JyBjeT0nMTAuNScgcj0nNi41Jy8+PGxpbmUgeDE9JzE1LjUnIHkxPScxNS41JyB4Mj0nMjAnIHkyPScyMCcvPjwvc3ZnPg==">
-    <title>Seeed Studio 认证查询</title>
+    <title data-i18n="title">Seeed Studio Certification Lookup</title>
     <style>
         :root { --brand: #0061B0; --brand-dark: #004C8C; --brand-tint: #E8F1F8; --brand-border: #CFE0F0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -111,38 +111,35 @@
             color: #856404; border-radius: 6px; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px;
         }
         .summary-card { text-align: center; background: var(--brand-tint); border: 1px solid var(--brand-border); }
+            .lang-switch { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+        .lang-btn { padding: 4px 16px; border: 2px solid #ddd; background: #fff; color: #666;
+            border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+        .lang-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+        .lang-btn:hover:not(.active) { border-color: var(--brand); color: var(--brand); }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Seeed Studio 产品认证查询</h1>
-            <p>输入 SKU 号或产品名称，查询认证信息与证书 PDF</p>
+            <div class="lang-switch">
+                <button class="lang-btn active" id="langEn" onclick="setLang('en')">EN</button>
+                <button class="lang-btn" id="langZh" onclick="setLang('zh')">中文</button>
+            </div>
+            <h1 data-i18n="title">Seeed Studio Product Certification Lookup</h1>
+            <p data-i18n="subtitle">Enter SKU number or product name to search certification info and certificate PDFs</p>
         </div>
         <div class="search-box">
-            <input type="text" id="skuInput" placeholder="输入 SKU 号或产品名称，如 114993117 或 respeaker clip（多个 SKU 用逗号分隔）" autofocus>
-            <button id="searchBtn" onclick="doSearch()">查询</button>
+            <input type="text" id="skuInput" placeholder="Enter SKU or product name" autofocus>
+            <button id="searchBtn" data-i18n="search" onclick="doSearch()">Search</button>
         </div>
         <div class="filter-bar">
-            <label for="certFilter">认证类型筛选：</label>
-            <select id="certFilter">
-                <option value="">全部认证</option>
-                <option value="CE">CE（欧盟）</option>
-                <option value="FCC">FCC（美国）</option>
-                <option value="ROHS">RoHS</option>
-                <option value="KC">KC（韩国）</option>
-                <option value="TELEC">TELEC（日本）</option>
-                <option value="UKCA">UKCA（英国）</option>
-                <option value="UKDOC">UKCA 符合性声明</option>
-                <option value="EUDOC">EU 符合性声明</option>
-                <option value="UL">UL（美国安全）</option>
-                <option value="TEST_REPORT">测试报告</option>
-            </select>
-            <span class="hint">选指定认证后，查询会逐个标出哪些 SKU 有 / 无该认证</span>
+            <label for="certFilter" data-i18n="filterLabel">Certification Filter:</label>
+            <select id="certFilter"></select>
+            <span class="hint" data-i18n="filterHint">Select a certification type to see which SKUs have/lack it</span>
         </div>
         <div class="export-bar">
-            <button id="exportBtn" onclick="downloadExcel()">📥 下载 Excel 认证映射表</button>
-            <span class="hint">包含所有 SKU 的认证类型、证书号、PDF链接、产品页面</span>
+            <button id="exportBtn" data-i18n="export" onclick="downloadExcel()">📥 Download Excel Certification Map</button>
+            <span class="hint" data-i18n="exportHint">Includes all SKUs cert types, certificate numbers, PDF links, and product pages</span>
         </div>
         <div id="result" class="result"></div>
         <div id="stats" class="stats"></div>
@@ -153,29 +150,174 @@
         const resultDiv = document.getElementById("result");
         const statsDiv = document.getElementById("stats");
         const exportBtn = document.getElementById("exportBtn");
+        const certFilter = document.getElementById("certFilter");
+
+        let lang = localStorage.getItem("lang") || "en";
+        let lastResults = [];
+        let lastNotFound = [];
+        let searchPrefix = "";
+
+        const T = {
+            en: {
+                title: "Seeed Studio Product Certification Lookup",
+                subtitle: "Enter SKU number or product name to search certification info and certificate PDFs",
+                search: "Search",
+                searching: "Searching...",
+                placeholder: "Enter SKU or product name, e.g. 114993117 or respeaker clip (separate multiple SKUs with commas)",
+                filterLabel: "Certification Filter:",
+                filterHint: "Select a certification type to see which SKUs have/lack it",
+                export: "📥 Download Excel Certification Map",
+                exporting: "Generating Excel...",
+                exportHint: "Includes all SKUs cert types, certificate numbers, PDF links, and product pages",
+                loading: "Querying certification info, first query may take a few seconds...",
+                loadingBatch: "Batch querying",
+                loadingBatchSuffix: " SKUs, first query may be slow, please wait...",
+                loadingName: "Searching product names...",
+                queryFail: "Search failed: ",
+                batchFail: "Batch search failed: ",
+                searchFail: "Search failed: ",
+                notFoundName: "No products found matching",
+                notFoundNameHint: "Check spelling or try other keywords, or enter a SKU number directly.",
+                nameSearch: "Name search",
+                nameSearchFound: "found",
+                nameSearchFoundSuffix: "matching products (click SKU to open product page)",
+                certFiles: "Certification Documents (PDF)",
+                noCertFiles: "No certification PDF files found",
+                certBadge: "Certificate",
+                testReport: "Test Report",
+                certNumber: "Cert No",
+                viewPdf: "View PDF",
+                datasheet: "📄 Download Product Datasheet PDF",
+                productPage: "View Seeed Studio Product Page →",
+                filterResult: "filter result",
+                has: "have",
+                no: "missing",
+                hasCert: "✅ Has",
+                noCert: "❌ This SKU does not have",
+                noResults: "No results found.",
+                notFoundShort: "Not found",
+                statsProducts: "products",
+                statsWithCerts: "with certs",
+                statsUpdated: "Updated",
+                totalSku: "Total",
+                skuLabel: "SKUs",
+            },
+            zh: {
+                title: "Seeed Studio 产品认证查询",
+                subtitle: "输入 SKU 号或产品名称，查询认证信息与证书 PDF",
+                search: "查询",
+                searching: "查询中...",
+                placeholder: "输入 SKU 号或产品名称，如 114993117 或 respeaker clip（多个 SKU 用逗号分隔）",
+                filterLabel: "认证类型筛选：",
+                filterHint: "选指定认证后，查询会逐个标出哪些 SKU 有 / 无该认证",
+                export: "📥 下载 Excel 认证映射表",
+                exporting: "正在生成 Excel...",
+                exportHint: "包含所有 SKU 的认证类型、证书号、PDF链接、产品页面",
+                loading: "正在查询认证信息，首次查询可能需要几秒钟...",
+                loadingBatch: "正在批量查询",
+                loadingBatchSuffix: " 个 SKU，首次查询可能较慢，请稍候...",
+                loadingName: "正在搜索产品名称...",
+                queryFail: "查询失败：",
+                batchFail: "批量查询失败：",
+                searchFail: "搜索失败：",
+                notFoundName: "未找到名称包含",
+                notFoundNameHint: "请检查拼写或尝试其他关键词，也可以直接输入 SKU 号查询。",
+                nameSearch: "名称搜索",
+                nameSearchFound: "找到",
+                nameSearchFoundSuffix: "个匹配产品（点击 SKU 号可跳转产品页面）",
+                certFiles: "认证文件（PDF）",
+                noCertFiles: "未找到认证 PDF 文件",
+                certBadge: "证书",
+                testReport: "测试报告",
+                certNumber: "认证号",
+                viewPdf: "查看 PDF",
+                datasheet: "📄 下载产品规格书 PDF",
+                productPage: "查看 Seeed Studio 产品页面 →",
+                filterResult: "筛选结果",
+                has: "有",
+                no: "无",
+                hasCert: "✅ 有",
+                noCert: "❌ 没有查询到该SKU的",
+                noResults: "未找到任何结果。",
+                notFoundShort: "未找到",
+                statsProducts: "个产品",
+                statsWithCerts: "个有认证信息",
+                statsUpdated: "最近更新",
+                totalSku: "共",
+                skuLabel: "个 SKU",
+            }
+        };
+
+        const CERT_FILTER_OPTIONS = {
+            en: [
+                {value: "", text: "All Certifications"},
+                {value: "CE", text: "CE (EU)"},
+                {value: "FCC", text: "FCC (USA)"},
+                {value: "ROHS", text: "RoHS"},
+                {value: "KC", text: "KC (Korea)"},
+                {value: "TELEC", text: "TELEC (Japan)"},
+                {value: "UKCA", text: "UKCA (UK)"},
+                {value: "UKDOC", text: "UKCA Declaration of Conformity"},
+                {value: "EUDOC", text: "EU Declaration of Conformity"},
+                {value: "UL", text: "UL (USA Safety)"},
+                {value: "TEST_REPORT", text: "Test Report"},
+            ],
+            zh: [
+                {value: "", text: "全部认证"},
+                {value: "CE", text: "CE（欧盟）"},
+                {value: "FCC", text: "FCC（美国）"},
+                {value: "ROHS", text: "RoHS"},
+                {value: "KC", text: "KC（韩国）"},
+                {value: "TELEC", text: "TELEC（日本）"},
+                {value: "UKCA", text: "UKCA（英国）"},
+                {value: "UKDOC", text: "UKCA 符合性声明"},
+                {value: "EUDOC", text: "EU 符合性声明"},
+                {value: "UL", text: "UL（美国安全）"},
+                {value: "TEST_REPORT", text: "测试报告"},
+            ]
+        };
+
+        const CERT_NAMES = {
+            en: {CE: "CE Certification", FCC: "FCC Certification", ROHS: "RoHS Certification", KC: "KC Certification", TELEC: "TELEC Certification", UKCA: "UKCA Certification", UKDOC: "UKCA Declaration of Conformity", EUDOC: "EU Declaration of Conformity", UL: "UL Certification", TEST_REPORT: "Test Report"},
+            zh: {CE: "CE 认证", FCC: "FCC 认证", ROHS: "RoHS 认证", KC: "KC 认证", TELEC: "TELEC 认证", UKCA: "UKCA 认证", UKDOC: "UKCA 符合性声明", EUDOC: "EU 符合性声明", UL: "UL 认证", TEST_REPORT: "测试报告"}
+        };
+
+        function t(key) { return T[lang][key] || key; }
+
+        function setLang(newLang) {
+            lang = newLang;
+            localStorage.setItem("lang", newLang);
+            document.querySelectorAll("[data-i18n]").forEach(el => {
+                const key = el.getAttribute("data-i18n");
+                if (T[lang][key]) el.textContent = T[lang][key];
+            });
+            skuInput.placeholder = T[lang].placeholder;
+            const currentFilter = certFilter.value;
+            certFilter.innerHTML = "";
+            CERT_FILTER_OPTIONS[lang].forEach(opt => {
+                const o = document.createElement("option");
+                o.value = opt.value;
+                o.textContent = opt.text;
+                certFilter.appendChild(o);
+            });
+            certFilter.value = currentFilter;
+            document.getElementById("langEn").classList.toggle("active", lang === "en");
+            document.getElementById("langZh").classList.toggle("active", lang === "zh");
+            if (lastResults.length || lastNotFound.length) renderAll();
+            if (!searchBtn.disabled) searchBtn.textContent = T[lang].search;
+        }
 
         skuInput.addEventListener("keypress", e => {
             if (e.key === "Enter") doSearch();
         });
 
-        const certFilter = document.getElementById("certFilter");
-        let lastResults = [];
-        let lastNotFound = [];
-        let searchPrefix = "";
-
-        const CERT_NAMES = {
-            CE: "CE 认证", FCC: "FCC 认证", ROHS: "RoHS 认证", KC: "KC 认证",
-            TELEC: "TELEC 认证", UKCA: "UKCA 认证", UKDOC: "UKCA 符合性声明",
-            EUDOC: "EU 符合性声明", UL: "UL 认证", TEST_REPORT: "测试报告"
-        };
-
         certFilter.addEventListener("change", renderAll);
 
-                async function doSearch() {
+        async function doSearch() {
             const raw = skuInput.value.trim();
             if (!raw) return;
             searchBtn.disabled = true;
-            searchBtn.textContent = "查询中...";
+            searchBtn.textContent = t("searching");
             resultDiv.style.display = "block";
             try {
                 if (/^[\d\s,;]+$/.test(raw) && /\d/.test(raw)) {
@@ -185,17 +327,17 @@
                     await doNameSearch(raw);
                 }
             } catch (e) {
-                resultDiv.innerHTML = `<div class="error">查询失败：${escapeHtml(e.message)}</div>`;
+                resultDiv.innerHTML = `<div class="error">${t("queryFail")}${escapeHtml(e.message)}</div>`;
             } finally {
                 searchBtn.disabled = false;
-                searchBtn.textContent = "查询";
+                searchBtn.textContent = t("search");
             }
         }
 
         async function doSkuSearch(skus) {
             searchPrefix = "";
             if (skus.length === 1) {
-                resultDiv.innerHTML = '<div class="loading">正在查询认证信息，首次查询可能需要几秒钟...</div>';
+                resultDiv.innerHTML = `<div class="loading">${t("loading")}</div>`;
                 try {
                     const resp = await fetch(`/api/query?sku=${encodeURIComponent(skus[0])}`);
                     const data = await resp.json();
@@ -203,12 +345,12 @@
                     lastNotFound = data.found ? [] : [{ sku: skus[0], message: data.message }];
                     renderAll();
                 } catch (e) {
-                    resultDiv.innerHTML = `<div class="error">查询失败：${escapeHtml(e.message)}</div>`;
+                    resultDiv.innerHTML = `<div class="error">${t("queryFail")}${escapeHtml(e.message)}</div>`;
                 }
                 return;
             }
             const batch = skus.slice(0, 8);
-            resultDiv.innerHTML = `<div class="loading">正在批量查询 ${batch.length} 个 SKU，首次查询可能较慢，请稍候...</div>`;
+            resultDiv.innerHTML = `<div class="loading">${t("loadingBatch")} ${batch.length} ${t("loadingBatchSuffix")}</div>`;
             try {
                 const resp = await fetch(`/api/query/batch?skus=${encodeURIComponent(batch.join(","))}`);
                 const data = await resp.json();
@@ -217,12 +359,12 @@
                 lastNotFound = items.filter(r => !r.found);
                 renderAll();
             } catch (e) {
-                resultDiv.innerHTML = `<div class="error">批量查询失败：${escapeHtml(e.message)}</div>`;
+                resultDiv.innerHTML = `<div class="error">${t("batchFail")}${escapeHtml(e.message)}</div>`;
             }
         }
 
         async function doNameSearch(query) {
-            resultDiv.innerHTML = '<div class="loading">正在搜索产品名称...</div>';
+            resultDiv.innerHTML = `<div class="loading">${t("loadingName")}</div>`;
             try {
                 const resp = await fetch(`/api/search?name=${encodeURIComponent(query)}`);
                 const data = await resp.json();
@@ -231,31 +373,31 @@
                 lastNotFound = [];
                 if (!lastResults.length) {
                     searchPrefix = "";
-                    resultDiv.innerHTML = `<div class="error">未找到名称包含 "${escapeHtml(query)}" 的产品。<br>请检查拼写或尝试其他关键词，也可以直接输入 SKU 号查询。</div>`;
+                    resultDiv.innerHTML = `<div class="error">${t("notFoundName")} "${escapeHtml(query)}".<br>${t("notFoundNameHint")}</div>`;
                     return;
                 }
-                searchPrefix = `<div class="result-card summary-card"><strong>名称搜索 "${escapeHtml(query)}"</strong>：找到 ${lastResults.length} 个匹配产品（点击 SKU 号可跳转产品页面）</div>`;
+                searchPrefix = `<div class="result-card summary-card"><strong>${t("nameSearch")} "${escapeHtml(query)}"</strong>: ${t("nameSearchFound")} ${lastResults.length} ${t("nameSearchFoundSuffix")}</div>`;
                 renderAll();
             } catch (e) {
                 searchPrefix = "";
-                resultDiv.innerHTML = `<div class="error">搜索失败：${escapeHtml(e.message)}</div>`;
+                resultDiv.innerHTML = `<div class="error">${t("searchFail")}${escapeHtml(e.message)}</div>`;
             }
         }
 
-function renderAll() {
+        function renderAll() {
             if (!lastResults.length && !lastNotFound.length) return;
             const ct = certFilter.value;
             let html = searchPrefix;
             const total = lastResults.length + lastNotFound.length;
             if (ct && total > 1) {
-                const certName = CERT_NAMES[ct] || ct;
+                const certName = CERT_NAMES[lang][ct] || ct;
                 const has = lastResults.filter(r => (r.certifications || []).some(c => c.type.toUpperCase() === ct)).length;
                 const no = total - has;
-                html += `<div class="result-card summary-card"><strong>${escapeHtml(certName)} 筛选结果</strong>：共 ${total} 个 SKU · <span style="color:#155724">${has} 个有</span> · <span style="color:#856404">${no} 个无</span></div>`;
+                html += `<div class="result-card summary-card"><strong>${escapeHtml(certName)} ${t("filterResult")}</strong>: ${t("totalSku")} ${total} ${t("skuLabel")} · <span style="color:#155724">${has} ${t("has")}</span> · <span style="color:#856404">${no} ${t("no")}</span></div>`;
             }
             html += lastResults.map(r => ct ? renderFilteredHtml(r, ct) : renderResultHtml(r)).join("");
-            html += lastNotFound.map(r => `<div class="result-card"><div class="error">SKU <a href="https://www.seeedstudio.com/catalogsearch/result/?q=${encodeURIComponent(r.sku)}" target="_blank">${escapeHtml(r.sku)}</a>：${escapeHtml(r.message || "未找到")}</div></div>`).join("");
-            resultDiv.innerHTML = html || '<div class="error">未找到任何结果。</div>';
+            html += lastNotFound.map(r => `<div class="result-card"><div class="error">SKU <a href="https://www.seeedstudio.com/catalogsearch/result/?q=${encodeURIComponent(r.sku)}" target="_blank">${escapeHtml(r.sku)}</a>: ${escapeHtml(r.message || t("notFoundShort"))}</div></div>`).join("");
+            resultDiv.innerHTML = html || `<div class="error">${t("noResults")}</div>`;
         }
 
         function renderResultHtml(data) {
@@ -266,51 +408,52 @@ function renderAll() {
             html += '</div>';
             const certs = data.certifications || [];
             if (certs.length > 0) {
-                html += '<div class="section-title">认证文件（PDF）</div><div class="cert-list">';
+                html += `<div class="section-title">${t("certFiles")}</div><div class="cert-list">`;
                 certs.forEach(c => {
                     const badge = c.source === "wiki"
-                        ? '<span class="cert-badge badge-wiki">测试报告</span>'
-                        : '<span class="cert-badge badge-certificate">证书</span>';
-                    let certNum = c.cert_number ? ` · 认证号: ${escapeHtml(c.cert_number)}` : "";
-                    html += `<div class="cert-item"><div><span>${badge}</span><span class="cert-name">${escapeHtml(c.name)}${certNum}</span></div><a href="${c.pdf_url}" target="_blank">查看 PDF</a></div>`;
+                        ? `<span class="cert-badge badge-wiki">${t("testReport")}</span>`
+                        : `<span class="cert-badge badge-certificate">${t("certBadge")}</span>`;
+                    let certNum = c.cert_number ? ` · ${t("certNumber")}: ${escapeHtml(c.cert_number)}` : "";
+                    html += `<div class="cert-item"><div><span>${badge}</span><span class="cert-name">${escapeHtml(c.name)}${certNum}</span></div><a href="${c.pdf_url}" target="_blank">${t("viewPdf")}</a></div>`;
                 });
                 html += '</div>';
             } else {
-                html += '<div class="section-title">未找到认证 PDF 文件</div>';
+                html += `<div class="section-title">${t("noCertFiles")}</div>`;
             }
             if (data.datasheet_url) {
-                html += `<div class="datasheet-link"><a href="${data.datasheet_url}" target="_blank">📄 下载产品规格书 PDF</a></div>`;
+                html += `<div class="datasheet-link"><a href="${data.datasheet_url}" target="_blank">${t("datasheet")}</a></div>`;
             }
             if (data.url) {
-                html += `<div class="product-link"><a href="${data.url}" target="_blank">查看 Seeed Studio 产品页面 →</a></div>`;
+                html += `<div class="product-link"><a href="${data.url}" target="_blank">${t("productPage")}</a></div>`;
             }
             html += '</div>';
             return html;
         }
 
         function renderFilteredHtml(data, certType) {
-            const certName = CERT_NAMES[certType] || certType;
+            const certName = CERT_NAMES[lang][certType] || certType;
             const match = (data.certifications || []).find(c => c.type.toUpperCase() === certType);
             let html = '<div class="result-card"><div class="product-info">';
             html += `<div class="sku">SKU: <a href="${data.url || `https://www.seeedstudio.com/catalogsearch/result/?q=${encodeURIComponent(data.sku)}`}" target="_blank">${escapeHtml(data.sku)}</a></div>`;
             if (data.name) html += `<div class="name">${escapeHtml(data.name)}</div>`;
             html += '</div>';
             if (match) {
-                html += `<div class="cert-found-badge">✅ 有 ${escapeHtml(certName)}</div>`;
+                html += `<div class="cert-found-badge">${t("hasCert")} ${escapeHtml(certName)}</div>`;
                 html += '<div class="cert-list"><div class="cert-item">';
                 const badge = match.source === "wiki"
-                    ? '<span class="cert-badge badge-wiki">测试报告</span>'
-                    : '<span class="cert-badge badge-certificate">证书</span>';
-                let certNum = match.cert_number ? ` · 认证号: ${escapeHtml(match.cert_number)}` : "";
+                    ? `<span class="cert-badge badge-wiki">${t("testReport")}</span>`
+                    : `<span class="cert-badge badge-certificate">${t("certBadge")}</span>`;
+                let certNum = match.cert_number ? ` · ${t("certNumber")}: ${escapeHtml(match.cert_number)}` : "";
                 html += `<div><span>${badge}</span><span class="cert-name">${escapeHtml(match.name)}${certNum}</span></div>`;
-                html += `<a href="${match.pdf_url}" target="_blank">查看 PDF</a>`;
+                html += `<a href="${match.pdf_url}" target="_blank">${t("viewPdf")}</a>`;
                 html += '</div></div>';
             } else {
-                html += `<div class="cert-missing-badge">❌ 没有查询到该SKU的${escapeHtml(certName)}</div>`;
+                html += `<div class="cert-missing-badge">${t("noCert")} ${escapeHtml(certName)}</div>`;
             }
             html += '</div>';
             return html;
         }
+
         function escapeHtml(text) {
             const div = document.createElement("div");
             div.textContent = text;
@@ -319,11 +462,11 @@ function renderAll() {
 
         function downloadExcel() {
             exportBtn.disabled = true;
-            exportBtn.textContent = "正在生成 Excel...";
+            exportBtn.textContent = t("exporting");
             window.location.href = "/api/export";
             setTimeout(() => {
                 exportBtn.disabled = false;
-                exportBtn.textContent = "📥 下载 Excel 认证映射表";
+                exportBtn.textContent = t("export");
             }, 3000);
         }
 
@@ -331,9 +474,11 @@ function renderAll() {
             try {
                 const resp = await fetch("/api/stats");
                 const data = await resp.json();
-                statsDiv.textContent = `数据库共 ${data.total_products || 0} 个产品 | ${data.products_with_certs || 0} 个有认证信息 | 最近更新: ${data.latest_update || "未知"}`;
+                statsDiv.textContent = `${data.total_products || 0} ${t("statsProducts")} | ${data.products_with_certs || 0} ${t("statsWithCerts")} | ${t("statsUpdated")}: ${data.latest_update || "Unknown"}`;
             } catch(e) { statsDiv.textContent = ""; }
         }
+
+        setLang(lang);
         loadStats();
     </script>
 </body>
